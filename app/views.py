@@ -26,7 +26,7 @@ def index():
     )
 
 
-@app.route('/login', methods = ['GET', 'POST'])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     form = LoginForm()
     if form.validate_on_submit():
@@ -39,3 +39,8 @@ def login():
         form=form,
         providers=app.config['OPENID_PROVIDERS']
     )
+
+
+@app.route('/echart')
+def show_chart():
+    return render_template('render.html')
