@@ -6,33 +6,16 @@
 <form action="" method="post" name="login">
     {{form.hidden_tag()}}
     <p>
-        Please enter your OpenID:<br>
+        Please enter your username:<br>
 
-        {{form.openid(size=80)}}<br>
+        {{form.nickname(size=80)}}<br>
 
-        {% for error in form.openid.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-        {% endfor %}<br>
+        Please enter your password:<br>
 
-        |{% for pr in providers %}
-            <a href="javascript:set_openid('{{ pr.url }}', '{{ pr.name }}');">{{ pr.name }}</a> |
-        {% endfor %}
+        {{form.password(size=80)}}<br>
+
     </p>
     <p>{{form.remember_me}} Remember Me</p>
     <p><input type="submit" value="Sign In"></p>
 </form>
-
-<script type="text/javascript">
-function set_openid(openid, pr)
-{
-    u = openid.search('<username>')
-    if (u != -1) {
-        // openid requires username
-        user = prompt('Enter your ' + pr + ' username:')
-        openid = openid.substr(0, u) + user
-    }
-    form = document.forms['login'];
-    form.elements['openid'].value = openid
-}
-</script>
 {% endblock %}
