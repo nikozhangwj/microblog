@@ -1,8 +1,25 @@
 from app import app, db, lm, oid
 from flask import render_template, flash, redirect, session, url_for, request, g, jsonify, abort, make_response
 from flask_login import login_user, logout_user, current_user, login_required
+from flask_httpauth import HTTPBasicAuth
 from .forms import LoginForm
 from .models import User
+
+
+auth = HTTPBasicAuth()
+
+
+@auth.error_handler
+def unauthorized():
+    return make_response(jsonify({'error': 'Unauthorized access'}), 401)
+
+
+@auth.get_password
+def get_password(username):
+    if User.is_vaild(username=username):
+        return '12345'
+    return None
+
 
 tasks = [
     {
