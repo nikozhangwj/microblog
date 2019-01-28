@@ -126,7 +126,7 @@ def make_public_task(task):
 
 @app.route('/todo/api/v1.0/tasks', methods=['GET'])
 def get_tasks():
-    return jsonify({'tasks': map(make_public_task, tasks)})
+    return jsonify({'tasks': [task for task in map(make_public_task, tasks)]})
 
 
 @app.route('/todo/api/v1.0/tasks/<int:task_id>', methods=['GET'])
