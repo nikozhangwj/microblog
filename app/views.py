@@ -2,23 +2,17 @@ from app import app, db, lm, oid
 from flask import render_template, flash, redirect, session, url_for, request, g, jsonify, abort, make_response
 from flask_login import login_user, logout_user, current_user, login_required
 from flask_httpauth import HTTPBasicAuth
+from flask_restful import Api, Resource, reqparse
 from .forms import LoginForm
 from .models import User
 
-
 auth = HTTPBasicAuth()
+api = Api(app)
 
 
 @auth.error_handler
 def unauthorized():
     return make_response(jsonify({'error': 'Unauthorized access'}), 403)
-
-
-@auth.get_password
-def get_password(username):
-    if User.is_vaild(username=username):
-        return '12345'
-    return None
 
 
 tasks = [
@@ -126,61 +120,149 @@ def show_chart():
     return render_template('render.html')
 
 
-@app.errorhandler(404)
-def not_found(error):
-    return make_response(jsonify({'error': str(error)}), 404)
-
-
 def make_public_task(task):
     new_task = {}
     for field in task:
         if field == 'id':
-            new_task['uri'] = url_for('get_task', task_id=task['id'], _external=True)
+            # new_task['uri'] = url_for('TaskListAPI', task_id=task['id'], _external=True)
+            new_task['uri'] = api.url_for(TaskListAPI, task_id=task['id'], _external=True)
         else:
             new_task[field] = task[field]
     return new_task
 
 
-@app.route('/todo/api/v1.0/tasks', methods=['GET'])
-def get_tasks():
-    return jsonify({'tasks': [task for task in map(make_public_task, tasks)]})
+class TaskListAPI(Resource):
+
+    def __init__(self):
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument('title', type=str, required=True,
+                                   help='No task title provided', location='json')
+        self.reqparse.add_argument('description', type=str, default="", location='json')
+        super(TaskListAPI, self).__init__()
+
+    def get(self):
+        return {'tasks': [task for task in map(make_public_task, tasks)]}
+        # return {'tasks': tasks}
+
+    def post(self):
+        if not request.json or 'title' not in request.json:
+            abort(400)
+        print(request)
+        task = {
+            'id': tasks[-1]['id'] + 1,
+            'title': request.json['title'],
+            'description': request.json.get('description', ""),
+            'done': False
+        }
+        tasks.append(task)
+        return {'task': task}, 201
 
 
-@app.route('/todo/api/v1.0/tasks/<int:task_id>', methods=['GET'])
-def get_task(task_id):
-    task = [task for task in tasks if task['id'] == task_id]
-    if not task:
-        abort(404)
-    return jsonify({'tasks': task[0]})
+class TaskAPI(Resource):
+
+    def __init__(self):
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument('title', type=str, location='json')
+        self.reqparse.add_argument('description', type=str, location='json')
+        self.reqparse.add_argument('done', type=bool, location='json')
+        super(TaskAPI, self).__init__()
+
+    def get(self, id):
+        task = [task for task in tasks if task['id'] == id]
+        if not task:
+            abort(404)
+        return {'tasks': [task for task in map(make_public_task, task)]}
+
+    def put(self, id):
+        task = [task for task in tasks if task['id'] == id]
+        if not task:
+            abort(404)
+        task[0]['title'] = request.json.get('title', task[0]['title'])
+        task[0]['description'] = request.json.get('description', task[0]['description'])
+        task[0]['done'] = request.json.get('done', task[0]['done'])
+        task = [raw_task for raw_task in map(make_public_task, task)]
+        return {'task': task}
+
+    def delete(self, id):
+        task = [task for task in tasks if task['id'] == id]
+        if not task:
+            abort(404)
+        tasks.remove(task[0])
+        return {'result': True}, 201
 
 
-@app.route('/todo/api/v1.0/tasks', methods=['POST'])
-def create_task():
-    if not request.json or 'title' not in request.json:
-        abort(400)
-    task = {
-        'id': tasks[-1]['id'] + 1,
-        'title': request.json['title'],
-        'description': request.json.get('description', ""),
-        'done': False
-    }
-    tasks.append(task)
-    return jsonify({'task': task}), 201
+api.add_resource(TaskListAPI, '/todo/api/v1.0/tasks', endpoint='tasks')
+api.add_resource(TaskAPI, '/todo/api/v1.0/tasks/<int:id>', endpoint='task')
 
 
-@app.route('/todo/api/v1.0/tasks/<int:task_id>', methods=['DELETE'])
-def delete_task(task_id):
-    task = [task for task in tasks if task['id'] == task_id]
-    if not task:
-        abort(404)
-    tasks.remove(task[0])
-    return jsonify({'result': True})
+# User API
 
 
-@app.route('/todo/api/v1.0/tasks/<int:task_id>', methods=['PUT'])
-def update_task(task_id):
-    task = [task for task in tasks if task['id'] == task_id]
-    task[0]['title'] = request.json.get('title', task[0]['title'])
-    task[0]['description'] = request.json.get('description', task[0]['description'])
-    task[0]['done'] = request.json.get('done', task[0]['done'])
-    return jsonify({'task': task[0]})
+class UserListAPI(Resource):
+
+    decorators = [auth.login_required]
+
+    def __init__(self):
+        self.reqparse = reqparse.RequestParser()
+        super(UserListAPI, self).__init__()
+
+    def get(self):
+        users = [users.nickname for users in User.query.all()]
+        if not users:
+            abort(400)
+        return {'users': users}
+
+    def post(self):
+        username = request.json.get('username')
+        password = request.json.get('password')
+        if username is None or password is None:
+            abort(400)  # missing arguments
+        if User.query.filter_by(nickname=username).first() is not None:
+            abort(400)  # existing user
+        user = User(nickname=username)
+        user.hash_password(password)
+        db.session.add(user)
+        db.session.commit()
+        return {'username': user.nickname}, 201, {'Location': url_for('get_user', id=user.id, _external=True)}
+
+
+class UserAPI(Resource):
+
+    def __init__(self):
+        self.reqparse = reqparse.RequestParser()
+        super(UserAPI, self).__init__()
+
+    def get(self, id):
+        user = User.query.get(id)
+        if not user:
+            abort(400)
+        return {'username': user.nickname}
+
+
+api.add_resource(UserListAPI, '/todo/api/v1.0/users', endpoint='users')
+api.add_resource(UserAPI, '/todo/api/v1.0/users/<int:id>')
+
+
+@app.route('/api/resource')
+@auth.login_required
+def get_resource():
+    return jsonify({'data': 'Hello, {}!'.format(g.user.nickname)})
+
+
+@auth.verify_password
+def verify_password(username_or_token, password):
+    user = User.verify_auth_token(username_or_token)
+    if not user:
+        user = User.query.filter_by(nickname=username_or_token).first()
+        if not user or not user.verify_password(password):
+            return False
+    g.user = user
+    return True
+
+
+@app.route('/api/token')
+@auth.login_required
+def get_auth_token():
+    expiration = app.config['TOKEN_EXPIRATION']
+    token = g.user.generate_auth_token(expiration=expiration)
+    return jsonify({'token': token.decode('ascii'), 'duration': expiration})
