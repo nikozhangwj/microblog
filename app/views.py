@@ -241,6 +241,8 @@ class UserListAPI(Resource):
 
 class UserAPI(Resource):
 
+    decorators = [auth.login_required]
+
     def __init__(self):
         self.reqparse = reqparse.RequestParser()
         super(UserAPI, self).__init__()
@@ -275,9 +277,11 @@ class PostAPI(Resource):
     def get(self, id):
         user = User.query.get(id)
         if not user:
+            app.logger.error("User does not exist.")
             abort(404)
         post = [{'body': post.body, 'create_time': str(post.timestamp)} for post in user.post.all()]
         if not post:
+            app.logger.error("Post does not exist.")
             return {'user': user.nickname, 'posts': 'user {} has no post yet.'.format(user.nickname)}
         return {'user': user.nickname, 'post': post}
 
