@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 CSRF_ENABLED = True
 SECRET_KEY = 'you-will-never-guess'
@@ -19,4 +20,7 @@ SQLALCHEMY_MIGRATE_REPO = os.path.join(basedir, 'db_repository')
 SQLALCHEMY_TRACK_MODIFICATIONS = True
 SQLALCHEMY_COMMIT_TEARDOWN = True
 
-TOKEN_EXPIRATION = 600
+TOKEN_EXPIRATION = 6000
+
+LOG_TIME = datetime.now()
+LOG_DIR = os.path.join(basedir, 'logs', 'microblog{}.log'.format(LOG_TIME.strftime("%Y%m%d")))

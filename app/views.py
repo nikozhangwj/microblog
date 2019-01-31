@@ -4,7 +4,7 @@ from flask_login import login_user, logout_user, current_user, login_required
 from flask_httpauth import HTTPBasicAuth
 from flask_restful import Api, Resource, reqparse
 from .forms import LoginForm
-from .models import User
+from .models import User, Post
 
 auth = HTTPBasicAuth()
 api = Api(app)
@@ -13,6 +13,11 @@ api = Api(app)
 @auth.error_handler
 def unauthorized():
     return make_response(jsonify({'error': 'Unauthorized access'}), 403)
+
+
+@auth.error_handler
+def page_not_found():
+    return make_response(jsonify({'error': 'Resource not found'}), 404)
 
 
 tasks = [
@@ -131,6 +136,7 @@ def make_public_task(task):
     return new_task
 
 
+# TaskAPI
 class TaskListAPI(Resource):
 
     def __init__(self):
@@ -196,8 +202,6 @@ api.add_resource(TaskAPI, '/todo/api/v1.0/tasks/<int:id>', endpoint='task')
 
 
 # User API
-
-
 class UserListAPI(Resource):
 
     decorators = [auth.login_required]
@@ -207,23 +211,32 @@ class UserListAPI(Resource):
         super(UserListAPI, self).__init__()
 
     def get(self):
-        users = [users.nickname for users in User.query.all()]
+        users = [
+            {
+                'username': users.nickname,
+                'id': users.id,
+                'post': [post.id for post in users.post.all()]
+            }
+            for users in User.query.all()
+        ]
+        app.logger.info("Get users from UserListAPI.")
         if not users:
-            abort(400)
+            app.logger.error("Users does not exist.")
+            abort(404)
         return {'users': users}
 
     def post(self):
         username = request.json.get('username')
         password = request.json.get('password')
         if username is None or password is None:
-            abort(400)  # missing arguments
+            abort(404)  # missing arguments
         if User.query.filter_by(nickname=username).first() is not None:
-            abort(400)  # existing user
+            abort(404)  # existing user
         user = User(nickname=username)
         user.hash_password(password)
         db.session.add(user)
         db.session.commit()
-        return {'username': user.nickname}, 201, {'Location': url_for('get_user', id=user.id, _external=True)}
+        return {'username': user.nickname}, 201, {'Location': api.url_for(UserAPI, id=user.id, _external=True)}
 
 
 class UserAPI(Resource):
@@ -235,12 +248,51 @@ class UserAPI(Resource):
     def get(self, id):
         user = User.query.get(id)
         if not user:
-            abort(400)
+            abort(404)
         return {'username': user.nickname}
+
+    def delete(self, id):
+        user = User.query.get(id)
+        if not user:
+            abort(404)
+        username = user.nickname
+        db.session.delete(user)
+        db.session.commit()
+        return {'result': 'delete {} success.'.format(username)}
 
 
 api.add_resource(UserListAPI, '/todo/api/v1.0/users', endpoint='users')
 api.add_resource(UserAPI, '/todo/api/v1.0/users/<int:id>')
+
+
+# PostAPI
+class PostAPI(Resource):
+
+    def __init__(self):
+        self.reqparse = reqparse.RequestParser()
+        super(PostAPI, self).__init__()
+
+    def get(self, id):
+        user = User.query.get(id)
+        if not user:
+            abort(404)
+        post = [{'body': post.body, 'create_time': str(post.timestamp)} for post in user.post.all()]
+        if not post:
+            return {'user': user.nickname, 'posts': 'user {} has no post yet.'.format(user.nickname)}
+        return {'user': user.nickname, 'post': post}
+
+    def post(self, id):
+        user = User.query.get(id)
+        if not user:
+            abort(404)
+        body = request.json.get('body')
+        if Post.add_post(body=body, userid=user.id):
+            return {'result': 'post success'}, 201, {'Location': api.url_for(PostAPI, id=user.id, _external=True)}
+        else:
+            abort(500)
+
+
+api.add_resource(PostAPI, '/todo/api/v1.0/post/<int:id>', endpoint='post')
 
 
 @app.route('/api/resource')
@@ -265,4 +317,5 @@ def verify_password(username_or_token, password):
 def get_auth_token():
     expiration = app.config['TOKEN_EXPIRATION']
     token = g.user.generate_auth_token(expiration=expiration)
+    app.logger.info("User {} get token from server, expiration {}.".format(g.user.nickname, expiration))
     return jsonify({'token': token.decode('ascii'), 'duration': expiration})

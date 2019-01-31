@@ -2,6 +2,7 @@ from app import db, app
 from passlib.hash import sha256_crypt
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
 from itsdangerous import SignatureExpired, BadSignature
+from datetime import datetime
 
 
 class User(db.Model):
@@ -65,3 +66,14 @@ class Post(db.Model):
 
     def __repr__(self):
         return '<Post {}>'.format(self.body)
+
+    @classmethod
+    def add_post(cls, userid, body):
+        try:
+            post = Post(body=body, user_id=userid, timestamp=datetime.now())
+            db.session.add(post)
+            db.session.commit()
+            return True
+        except BaseException as error:
+            app.logger.error(str(error))
+            return False
