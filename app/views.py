@@ -1,10 +1,11 @@
-from app import app, db, lm, oid
+from app import app, db, lm, oid, socketio, emit
 from flask import render_template, flash, redirect, session, url_for, request, g, jsonify, abort, make_response
 from flask_login import login_user, logout_user, current_user, login_required
 from flask_httpauth import HTTPBasicAuth
 from flask_restful import Api, Resource, reqparse
 from .forms import LoginForm
 from .models import User, Post
+import random
 
 auth = HTTPBasicAuth()
 api = Api(app)
@@ -123,6 +124,11 @@ def user(nickname):
 @login_required
 def show_chart():
     return render_template('render.html')
+
+
+@app.route('/xterm')
+def show_terminal():
+    return render_template('xt.html')
 
 
 def make_public_task(task):
@@ -323,3 +329,25 @@ def get_auth_token():
     token = g.user.generate_auth_token(expiration=expiration)
     app.logger.info("User {} get token from server, expiration {}.".format(g.user.nickname, expiration))
     return jsonify({'token': token.decode('ascii'), 'duration': expiration})
+
+
+@socketio.on('connect', namespace='/test_conn')
+def test_connect():
+    while True:
+        socketio.sleep(5)
+        t = random_int_list(1, 100, 10)
+        socketio.emit('server_response', {'data': t}, namespace='/test_conn')
+
+
+def random_int_list(start, stop, length):
+    start, stop = (int(start), int(stop)) if start <= stop else (int(stop), int(start))
+    length = int(abs(length)) if length else 0
+    random_list = []
+    for i in range(length):
+        random_list.append(random.randint(start, stop))
+    return random_list
+
+
+@app.route('/ws')
+def blog_socket_route():
+    return render_template('/ws.html')
