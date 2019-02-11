@@ -336,7 +336,7 @@ def test_connect():
     while True:
         socketio.sleep(5)
         t = random_int_list(1, 100, 10)
-        socketio.emit('server_response', {'data': t}, namespace='/test_conn')
+        emit('server_response', {'data': t}, namespace='/test_conn')
 
 
 def random_int_list(start, stop, length):

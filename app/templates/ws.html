@@ -14,7 +14,7 @@
         var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port + namespace);
         socket.on('server_response', function(res) {
             var t = res.data;
-            console.log(socket)
+            console.log(t)
             $("#t").text(t);
         });
 
