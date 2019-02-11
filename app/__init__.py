@@ -15,9 +15,8 @@ lm = LoginManager()
 lm.init_app(app)
 lm.login_view = 'login'
 oid = OpenID(app, os.path.join(basedir, 'tmp'))
-
-socketio = SocketIO(app)
-socketio.init_app(app)
+async_mode = None
+socketio = SocketIO(app, async_mode=async_mode)
 
 logging.basicConfig(filename=LOG_DIR, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
